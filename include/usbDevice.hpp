@@ -4,15 +4,16 @@
 #include <string>
 #include <vector>
 
+#include "candle.hpp"
 #include "bus.hpp"
 
 class UsbDevice : public mab::Bus
 {
-   public:
+public:
 	UsbDevice(){};
-	UsbDevice(const std::string idVendor, const std::string idProduct, std::vector<unsigned long> instances);
+	UsbDevice(const std::string idVendor, const std::string idProduct, std::vector<mab::Candle *> instances);
 	~UsbDevice();
-	bool transmit(char* buffer, int len, bool waitForResponse = false, int timeout = 100, int responseLen = 0, bool faultVerbose = true) override;
+	bool transmit(char *buffer, int len, bool waitForResponse = false, int timeout = 100, int responseLen = 0, bool faultVerbose = true) override;
 	bool receive(int responseLen, int timeoutMs = 100, bool checkCrc = true, bool faultVerbose = true) override;
 	unsigned long getId() override;
 	std::string getDeviceName() override;
@@ -21,9 +22,10 @@ class UsbDevice : public mab::Bus
 	static std::vector<std::string> getConnectedACMDevices(std::string idVendor, std::string idProduct);
 	static unsigned long getConnectedDeviceId(std::string devName);
 
-   private:
+private:
 	int fd;
-	std::string serialDeviceName;
+	std::string serialDeviceName, idVendor, idProduct;
+	std::vector<mab::Candle *> instances;
 	unsigned long serialDeviceId = 0;
 	std::mutex rxLock;
 };

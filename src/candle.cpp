@@ -29,12 +29,12 @@ uint64_t getTimestamp()
 	return duration_cast<microseconds>(system_clock::now().time_since_epoch()).count();
 }
 
-std::vector<Candle*> Candle::instances = std::vector<Candle*>();
+std::vector<Candle *> Candle::instances = std::vector<Candle *>();
 
 Candle::Candle(CANdleBaudrate_E canBaudrate, bool printVerbose, mab::BusType_E busType, const std::string device)
 	: Candle(canBaudrate, printVerbose, makeBus(busType, device)) {}
 
-Candle::Candle(CANdleBaudrate_E canBaudrate, bool printVerbose, mab::Bus* bus)
+Candle::Candle(CANdleBaudrate_E canBaudrate, bool printVerbose, mab::Bus *bus)
 	: printVerbose(printVerbose), bus(bus)
 {
 	vout << "CANdle library version: v" << getVersion() << std::endl;
@@ -66,16 +66,16 @@ Candle::~Candle()
 		this->end();
 }
 
-Bus* Candle::makeBus(mab::BusType_E busType, std::string device)
+Bus *Candle::makeBus(mab::BusType_E busType, std::string device)
 {
 	switch (busType)
 	{
 		case mab::BusType_E::USB:
 		{
-			std::vector<unsigned long> a;
-			for (auto& instance : instances)
-				a.push_back(instance->getDeviceId());
-			return new UsbDevice("MAB_Robotics", "MD_USB-TO-CAN", a);
+			// std::vector<unsigned long> a;
+			// for (auto &instance : instances)
+			// 	a.push_back(instance->getDeviceId());
+			return new UsbDevice("MAB_Robotics", "MD_USB-TO-CAN", instances);
 		}
 		case mab::BusType_E::SPI:
 		{
@@ -109,7 +109,8 @@ int Candle::getActualCommunicationFrequency()
 
 void Candle::setTransmitDelayUs(uint32_t delayUs)
 {
-	if (delayUs < 20) delayUs = 20;
+	if (delayUs < 20)
+		delayUs = 20;
 	transmitterDelay = delayUs;
 }
 
@@ -130,8 +131,8 @@ void Candle::receive()
 		}
 		else
 		{
-			shouldStopReceiver = true;
-			shouldStopTransmitter = true;
+			// shouldStopReceiver = true;
+			// shouldStopTransmitter = true;
 			sem_post(&received);
 			vout << "Did not receive response from CANdle!" << statusFAIL << std::endl;
 		}
@@ -199,7 +200,7 @@ void Candle::manageReceivedFrame()
 {
 	for (int i = 0; i < (int)md80s.size(); i++)
 	{
-		md80s[i].__updateResponseData((StdMd80ResponseFrame_t*)bus->getRxBuffer(1 + i * sizeof(StdMd80ResponseFrame_t)));
+		md80s[i].__updateResponseData((StdMd80ResponseFrame_t *)bus->getRxBuffer(1 + i * sizeof(StdMd80ResponseFrame_t)));
 	}
 }
 
@@ -222,38 +223,38 @@ GenericMd80Frame32 _packMd80Frame(int canId, int msgLen, Md80FrameId_E canFrameI
 	frame.canMsg[1] = 0x00;
 	return frame;
 }
-void Candle::sendGetInfoFrame(mab::Md80& drive)
+void Candle::sendGetInfoFrame(mab::Md80 &drive)
 {
 	GenericMd80Frame32 getInfoFrame = _packMd80Frame(drive.getId(), 2, Md80FrameId_E::FRAME_GET_INFO);
-	if (bus->transmit((char*)&getInfoFrame, sizeof(getInfoFrame), true, 100, 66))
+	if (bus->transmit((char *)&getInfoFrame, sizeof(getInfoFrame), true, 100, 66))
 	{
 		uint8_t cheaterBuffer[72];
 		memcpy(&cheaterBuffer[1], bus->getRxBuffer(), bus->getBytesReceived());
-		*(uint16_t*)&cheaterBuffer[0] = drive.getId();
-		cheaterBuffer[2] = 16;	// Cheater buffer is a dirty trick to make BUS_FRAME_MD80_GENERIC_FRAME response compatibile with __updateResponseData
-		drive.__updateResponseData((mab::StdMd80ResponseFrame_t*)cheaterBuffer);
+		*(uint16_t *)&cheaterBuffer[0] = drive.getId();
+		cheaterBuffer[2] = 16; // Cheater buffer is a dirty trick to make BUS_FRAME_MD80_GENERIC_FRAME response compatibile with __updateResponseData
+		drive.__updateResponseData((mab::StdMd80ResponseFrame_t *)cheaterBuffer);
 	}
 }
-void Candle::sendMotionCommand(mab::Md80& drive, float pos, float vel, float torque)
+void Candle::sendMotionCommand(mab::Md80 &drive, float pos, float vel, float torque)
 {
 	GenericMd80Frame32 motionCommandFrame = _packMd80Frame(drive.getId(), 16, Md80FrameId_E::FRAME_SET_MOTION_TARGETS);
-	*(float*)&motionCommandFrame.canMsg[2] = vel;
-	*(float*)&motionCommandFrame.canMsg[6] = pos;
-	*(float*)&motionCommandFrame.canMsg[10] = torque;
-	if (bus->transmit((char*)&motionCommandFrame, sizeof(motionCommandFrame), true, 100, 66))
+	*(float *)&motionCommandFrame.canMsg[2] = vel;
+	*(float *)&motionCommandFrame.canMsg[6] = pos;
+	*(float *)&motionCommandFrame.canMsg[10] = torque;
+	if (bus->transmit((char *)&motionCommandFrame, sizeof(motionCommandFrame), true, 100, 66))
 	{
 		uint8_t cheaterBuffer[72];
 		memcpy(&cheaterBuffer[1], bus->getRxBuffer(), bus->getBytesReceived());
-		*(uint16_t*)&cheaterBuffer[0] = drive.getId();
-		cheaterBuffer[2] = 16;	// Cheater buffer is a dirty trick to make BUS_FRAME_MD80_GENERIC_FRAME response compatibile with __updateResponseData
-		drive.__updateResponseData((mab::StdMd80ResponseFrame_t*)cheaterBuffer);
+		*(uint16_t *)&cheaterBuffer[0] = drive.getId();
+		cheaterBuffer[2] = 16; // Cheater buffer is a dirty trick to make BUS_FRAME_MD80_GENERIC_FRAME response compatibile with __updateResponseData
+		drive.__updateResponseData((mab::StdMd80ResponseFrame_t *)cheaterBuffer);
 	}
 }
 bool Candle::addMd80(uint16_t canId, bool printFailure)
 {
 	if (inUpdateMode())
 		return false;
-	for (auto& d : md80s)
+	for (auto &d : md80s)
 		if (d.getId() == canId)
 		{
 			vout << "MD80 with ID: " << canId << " is already on the update list." << statusOK << std::endl;
@@ -265,7 +266,7 @@ bool Candle::addMd80(uint16_t canId, bool printFailure)
 		return false;
 	}
 	AddMd80Frame_t add = {BUS_FRAME_MD80_ADD, canId};
-	if (bus->transmit((char*)&add, sizeof(AddMd80Frame_t), true, 2, 2))
+	if (bus->transmit((char *)&add, sizeof(AddMd80Frame_t), true, 2, 2))
 		if (*bus->getRxBuffer(0) == BUS_FRAME_MD80_ADD)
 			if (*bus->getRxBuffer(1) == true)
 			{
@@ -289,13 +290,14 @@ bool Candle::addMd80(uint16_t canId, bool printFailure)
 				}
 				vout << "Added MD80 with ID: " + std::to_string(canId) << statusOK << std::endl;
 				md80s.push_back(Md80(canId));
-				mab::Md80& newDrive = md80s.back();
+				mab::Md80 &newDrive = md80s.back();
 				sendGetInfoFrame(newDrive);
 				sendMotionCommand(newDrive, newDrive.getPosition(), 0.0f, 0.0f);
 				newDrive.setTargetPosition(newDrive.getPosition());
 				return true;
 			}
-	if (printFailure) vout << "Failed to add MD80 with ID: " + std::to_string(canId) << statusFAIL << std::endl;
+	if (printFailure)
+		vout << "Failed to add MD80 with ID: " + std::to_string(canId) << statusFAIL << std::endl;
 	return false;
 }
 std::vector<uint16_t> Candle::ping(mab::CANdleBaudrate_E baudrate)
@@ -309,7 +311,7 @@ std::vector<uint16_t> Candle::ping(mab::CANdleBaudrate_E baudrate)
 	std::vector<uint16_t> ids;
 	if (bus->transmit(tx, 2, true, 2000, 33))
 	{
-		uint16_t* idsPointer = (uint16_t*)bus->getRxBuffer(1);
+		uint16_t *idsPointer = (uint16_t *)bus->getRxBuffer(1);
 		for (int i = 0; i < maxDevices; i++)
 		{
 			uint16_t id = idsPointer[i];
@@ -326,13 +328,13 @@ std::vector<uint16_t> Candle::ping(mab::CANdleBaudrate_E baudrate)
 		for (size_t i = 0; i < ids.size(); i++)
 		{
 			if (ids[i] == 0)
-				break;	// No more ids in the message
+				break; // No more ids in the message
 
 			vout << std::to_string(i + 1) << ": ID = " << ids[i] << " (0x" << std::hex << ids[i] << std::dec << ")" << std::endl;
 			if (ids[i] > idMax)
 			{
 				vout << "Error! This ID is invalid! Probably two or more drives share same ID."
-					 << "Communication will most likely be broken until IDs are unique!" << statusFAIL << std::endl;
+						<< "Communication will most likely be broken until IDs are unique!" << statusFAIL << std::endl;
 				std::vector<uint16_t> empty;
 				return empty;
 			}
@@ -344,7 +346,7 @@ std::vector<uint16_t> Candle::ping()
 {
 	return ping(canBaudrate);
 }
-bool Candle::sendGenericFDCanFrame(uint16_t canId, int msgLen, const char* txBuffer, char* rxBuffer, int timeoutMs)
+bool Candle::sendGenericFDCanFrame(uint16_t canId, int msgLen, const char *txBuffer, char *rxBuffer, int timeoutMs)
 {
 	int fdcanTimeout = timeoutMs - 3;
 	if (timeoutMs < 3)
@@ -361,11 +363,11 @@ bool Candle::sendGenericFDCanFrame(uint16_t canId, int msgLen, const char* txBuf
 	char tx[96];
 	int len = sizeof(frame) - sizeof(frame.canMsg) + msgLen;
 	memcpy(tx, &frame, len);
-	if (bus->transmit(tx, len, true, timeoutMs, 66))  // Got some response
+	if (bus->transmit(tx, len, true, timeoutMs, 66)) // Got some response
 	{
-		if (*bus->getRxBuffer(0) == tx[0] &&  // USB Frame ID matches
+		if (*bus->getRxBuffer(0) == tx[0] && // USB Frame ID matches
 			*bus->getRxBuffer(1) == true &&
-			bus->getBytesReceived() <= 64 + 2)	// response can ID matches
+			bus->getBytesReceived() <= 64 + 2) // response can ID matches
 		{
 			memcpy(rxBuffer, bus->getRxBuffer(2), bus->getBytesReceived() - 2);
 			return true;
@@ -384,10 +386,10 @@ bool Candle::configMd80Can(uint16_t canId, uint16_t newId, CANdleBaudrate_E newB
 
 	GenericMd80Frame32 frame = _packMd80Frame(canId, 11, Md80FrameId_E::FRAME_CAN_CONFIG);
 	frame.frameId = BUS_FRAME_MD80_CONFIG_CAN;
-	*(uint16_t*)&frame.canMsg[2] = newId;
-	*(uint32_t*)&frame.canMsg[4] = newBaudrateMbps * 1000000;
-	*(uint16_t*)&frame.canMsg[8] = newTimeout;
-	*(uint8_t*)&frame.canMsg[10] = (uint8_t)canTermination == true ? 1 : 0;
+	*(uint16_t *)&frame.canMsg[2] = newId;
+	*(uint32_t *)&frame.canMsg[4] = newBaudrateMbps * 1000000;
+	*(uint16_t *)&frame.canMsg[8] = newTimeout;
+	*(uint8_t *)&frame.canMsg[10] = (uint8_t)canTermination == true ? 1 : 0;
 
 	char tx[63];
 	int len = sizeof(frame);
@@ -446,7 +448,7 @@ bool Candle::controlMd80SetEncoderZero(uint16_t canId)
 		if (*bus->getRxBuffer(1) == true)
 		{
 			/* set target position to 0.0f to avoid jerk at startup */
-			Md80& drive = getMd80FromList(canId);
+			Md80 &drive = getMd80FromList(canId);
 			sendMotionCommand(drive, 0.0f, 0.0f, 0.0f);
 			drive.setTargetPosition(0.0f);
 			vout << "Setting new zero position successful at ID: " << canId << statusOK << std::endl;
@@ -469,7 +471,7 @@ bool Candle::configMd80SetCurrentLimit(uint16_t canId, float currentLimit)
 	}
 
 	GenericMd80Frame32 frame = _packMd80Frame(canId, 6, Md80FrameId_E::FRAME_BASE_CONFIG);
-	*(float*)&frame.canMsg[2] = currentLimit;
+	*(float *)&frame.canMsg[2] = currentLimit;
 	char tx[64];
 	int len = sizeof(frame);
 	memcpy(tx, &frame, len);
@@ -494,7 +496,7 @@ bool Candle::configCandleBaudrate(CANdleBaudrate_E canBaudrate, bool printVersio
 	{
 		if (*bus->getRxBuffer(0) == BUS_FRAME_CANDLE_CONFIG_BAUDRATE && *bus->getRxBuffer(1) == true)
 		{
-			candleDeviceVersion.i = *(uint32_t*)bus->getRxBuffer(2);
+			candleDeviceVersion.i = *(uint32_t *)bus->getRxBuffer(2);
 
 			if (printVersionInfo)
 			{
@@ -540,22 +542,22 @@ bool Candle::configMd80TorqueBandwidth(uint16_t canId, uint16_t torqueBandwidth)
 	return false;
 }
 
-Md80& Candle::getMd80FromList(uint16_t id)
+Md80 &Candle::getMd80FromList(uint16_t id)
 {
 	for (int i = 0; i < (int)md80s.size(); i++)
 		if (md80s[i].getId() == id)
 			return md80s[i];
 	throw "getMd80FromList(id): Id not found on the list!";
 }
-bool Candle::controlMd80SetEncoderZero(Md80& drive)
+bool Candle::controlMd80SetEncoderZero(Md80 &drive)
 {
 	return this->controlMd80SetEncoderZero(drive.getId());
 }
-bool Candle::controlMd80Enable(Md80& drive, bool enable)
+bool Candle::controlMd80Enable(Md80 &drive, bool enable)
 {
 	return this->controlMd80Enable(drive.getId(), enable);
 }
-bool Candle::controlMd80Mode(Md80& drive, Md80Mode_E mode)
+bool Candle::controlMd80Mode(Md80 &drive, Md80Mode_E mode)
 {
 	return this->controlMd80Mode(drive.getId(), mode);
 }
@@ -568,7 +570,7 @@ bool Candle::controlMd80Mode(uint16_t canId, Md80Mode_E mode)
 	}
 	try
 	{
-		Md80& drive = getMd80FromList(canId);
+		Md80 &drive = getMd80FromList(canId);
 		GenericMd80Frame32 frame = _packMd80Frame(canId, 3, Md80FrameId_E::FRAME_CONTROL_SELECT);
 		frame.canMsg[2] = mode;
 		char tx[64];
@@ -584,7 +586,7 @@ bool Candle::controlMd80Mode(uint16_t canId, Md80Mode_E mode)
 		vout << "Setting control mode failed at ID: " << canId << statusFAIL << std::endl;
 		return false;
 	}
-	catch (const char* msg)
+	catch (const char *msg)
 	{
 		vout << msg << std::endl;
 		return false;
@@ -607,14 +609,14 @@ bool Candle::controlMd80Enable(uint16_t canId, bool enable)
 				else
 				{
 					vout << "Disabling successful at ID: " << canId << statusOK << std::endl;
-					this->getMd80FromList(canId).__updateRegulatorsAdjusted(false);	 // Drive will operate at default params
+					this->getMd80FromList(canId).__updateRegulatorsAdjusted(false); // Drive will operate at default params
 				}
 				return true;
 			}
 		vout << "Enabling/Disabling failed at ID: " << canId << statusFAIL << std::endl;
 		return false;
 	}
-	catch (const char* msg)
+	catch (const char *msg)
 	{
 		vout << msg << std::endl;
 		return false;
@@ -713,7 +715,7 @@ void Candle::transmitNewStdFrame()
 	for (int i = 0; i < (int)md80s.size(); i++)
 	{
 		md80s[i].__updateCommandFrame();
-		*(StdMd80CommandFrame_t*)&tx[1 + i * sizeof(StdMd80CommandFrame_t)] = md80s[i].__getCommandFrame();
+		*(StdMd80CommandFrame_t *)&tx[1 + i * sizeof(StdMd80CommandFrame_t)] = md80s[i].__getCommandFrame();
 	}
 
 	int length = 1 + md80s.size() * sizeof(StdMd80CommandFrame_t);
@@ -758,7 +760,7 @@ bool Candle::setupMd80CalibrationOutput(uint16_t canId)
 
 bool Candle::setupMd80TestOutputEncoder(uint16_t canId)
 {
-	regWrite_st& regW = getMd80FromList(canId).getWriteReg();
+	regWrite_st &regW = getMd80FromList(canId).getWriteReg();
 
 	if (!md80Register->write(canId, mab::Md80Reg_E::runTestOutputEncoderCmd, regW.RW.runTestOutputEncoderCmd))
 	{
@@ -771,7 +773,7 @@ bool Candle::setupMd80TestOutputEncoder(uint16_t canId)
 
 bool Candle::setupMd80TestMainEncoder(uint16_t canId)
 {
-	regWrite_st& regW = getMd80FromList(canId).getWriteReg();
+	regWrite_st &regW = getMd80FromList(canId).getWriteReg();
 
 	if (!md80Register->write(canId, mab::Md80Reg_E::runTestMainEncoderCmd, regW.RW.runTestMainEncoderCmd))
 	{
@@ -800,7 +802,7 @@ bool Candle::setupMd80Diagnostic(uint16_t canId)
 }
 bool Candle::setupMd80DiagnosticExtended(uint16_t canId)
 {
-	regRead_st& regR = getMd80FromList(canId).getReadReg();
+	regRead_st &regR = getMd80FromList(canId).getReadReg();
 
 	if (!md80Register->read(canId,
 							mab::Md80Reg_E::motorName, regR.RW.motorName,
@@ -907,7 +909,7 @@ bool Candle::checkMd80ForBaudrate(uint16_t canId)
 	return false;
 }
 
-std::string getVersionString(const version_ut* ver)
+std::string getVersionString(const version_ut *ver)
 {
 	if ((char)ver->s.tag == 'r' || (char)ver->s.tag == 'R')
 		return std::string(std::to_string(ver->s.major) + '.' + std::to_string(ver->s.minor) + '.' + std::to_string(ver->s.revision));
@@ -915,4 +917,4 @@ std::string getVersionString(const version_ut* ver)
 		return std::string(std::to_string(ver->s.major) + '.' + std::to_string(ver->s.minor) + '.' + std::to_string(ver->s.revision) + '.' + (char)ver->s.tag);
 }
 
-}  // namespace mab
+} // namespace mab

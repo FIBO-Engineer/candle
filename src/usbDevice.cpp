@@ -11,6 +11,7 @@
 #include <cstring>
 #include <iostream>
 
+#include "candle.hpp"
 #include "bus.hpp"
 
 struct termios tty;
@@ -21,9 +22,9 @@ struct termios ti_prev;
 int open_device(std::string devName, std::string idVendor, std::string idProduct);
 bool checkDeviceAvailable(std::string devName, std::string idVendor, std::string idProduct);
 std::string getDeviceShortId(std::string devName);
-unsigned long hash(const char* str);
+unsigned long hash(const char *str);
 
-UsbDevice::UsbDevice(const std::string idVendor, const std::string idProduct, std::vector<unsigned long> instances)
+UsbDevice::UsbDevice(const std::string idVendor, const std::string idProduct, std::vector<mab::Candle *> instances) : idVendor(idVendor), idProduct(idProduct), instances(instances)
 {
 	auto listOfDevices = UsbDevice::getConnectedACMDevices(idVendor, idProduct);
 
@@ -39,11 +40,11 @@ UsbDevice::UsbDevice(const std::string idVendor, const std::string idProduct, st
 		serialDeviceName = listOfDevices[0];
 	else
 	{
-		for (auto& entry : listOfDevices)
+		for (auto &entry : listOfDevices)
 		{
 			unsigned int newIdCount = 0;
-			for (auto& instance : instances)
-				if (UsbDevice::getConnectedDeviceId(entry) != instance)
+			for (auto &instance : instances)
+				if (UsbDevice::getConnectedDeviceId(entry) != instance->getDeviceId())
 					newIdCount++;
 
 			/* only if all instances were different from the current one -> create new device */
@@ -53,42 +54,41 @@ UsbDevice::UsbDevice(const std::string idVendor, const std::string idProduct, st
 				goto loopdone;
 			}
 		}
-		const char* msg = "[USB] Failed to create USB object";
+		const char *msg = "[USB] Failed to create USB object";
 		throw msg;
 	}
 
 loopdone:
-
 	int device_descriptor = open_device(serialDeviceName, idVendor, idProduct);
 	serialDeviceId = getConnectedDeviceId(serialDeviceName);
 
 	if (device_descriptor < 0)
 	{
-		const char* msg = "[USB] Device not found! Try re-plugging the device!";
+		const char *msg = "[USB] Device not found! Try re-plugging the device!";
 		std::cout << msg << std::endl;
 		throw msg;
 	}
 
-	tcgetattr(device_descriptor, &ti_prev);										  // Save the previous serial config
-	tcgetattr(device_descriptor, &tty);											  // Read the previous serial config
-	tty.c_cflag &= ~PARENB;														  // No parity
-	tty.c_cflag &= ~CSTOPB;														  // One stop bit
-	tty.c_cflag &= ~CSIZE;														  // Clear bit size setting
-	tty.c_cflag |= CS8;															  // 8 Bits mode
-	tty.c_cflag |= CREAD | CLOCAL;												  // Turn on READ & ignore ctrl lines (CLOCAL = 1)
-	tty.c_lflag &= ~ICANON;														  // Disable canonical mode
-	tty.c_lflag &= ~ECHO;														  // Disable echo
-	tty.c_lflag &= ~ECHOE;														  // Disable erasure
-	tty.c_lflag &= ~ECHONL;														  // Disable new-line echo
-	tty.c_lflag &= ~ISIG;														  // Disable interpretation of INTR, QUIT and SUSP
-	tty.c_iflag &= ~(IXON | IXOFF | IXANY);										  // Disable software flow control
-	tty.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);  // Disable special chars on RX
-	tty.c_oflag &= ~OPOST;														  // Prevent special interpretation of output bytes
-	tty.c_oflag &= ~ONLCR;														  // Prevent conversion of newline to carriage return/line feed
-	tty.c_cc[VTIME] = 0;														  // Wait for up to 0.1s (1 decisecond), returning as soon as any data is received.
+	tcgetattr(device_descriptor, &ti_prev);										 // Save the previous serial config
+	tcgetattr(device_descriptor, &tty);											 // Read the previous serial config
+	tty.c_cflag &= ~PARENB;														 // No parity
+	tty.c_cflag &= ~CSTOPB;														 // One stop bit
+	tty.c_cflag &= ~CSIZE;														 // Clear bit size setting
+	tty.c_cflag |= CS8;															 // 8 Bits mode
+	tty.c_cflag |= CREAD | CLOCAL;												 // Turn on READ & ignore ctrl lines (CLOCAL = 1)
+	tty.c_lflag &= ~ICANON;														 // Disable canonical mode
+	tty.c_lflag &= ~ECHO;														 // Disable echo
+	tty.c_lflag &= ~ECHOE;														 // Disable erasure
+	tty.c_lflag &= ~ECHONL;														 // Disable new-line echo
+	tty.c_lflag &= ~ISIG;														 // Disable interpretation of INTR, QUIT and SUSP
+	tty.c_iflag &= ~(IXON | IXOFF | IXANY);										 // Disable software flow control
+	tty.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL); // Disable special chars on RX
+	tty.c_oflag &= ~OPOST;														 // Prevent special interpretation of output bytes
+	tty.c_oflag &= ~ONLCR;														 // Prevent conversion of newline to carriage return/line feed
+	tty.c_cc[VTIME] = 0;														 // Wait for up to 0.1s (1 decisecond), returning as soon as any data is received.
 	tty.c_cc[VMIN] = 0;
 
-	tcsetattr(device_descriptor, TCSANOW, &tty);  // Set the new serial config
+	tcsetattr(device_descriptor, TCSANOW, &tty); // Set the new serial config
 
 	this->fd = device_descriptor;
 
@@ -97,21 +97,102 @@ loopdone:
 		std::cout << "Could not execute command '" << setSerialCommand << "'. Communication in low-speed mode." << std::endl;
 }
 
-bool UsbDevice::transmit(char* buffer, int len, bool waitForResponse, int timeout, int responseLen, bool faultVerbose)
+bool UsbDevice::transmit(char *buffer, int len, bool waitForResponse, int timeout, int responseLen, bool faultVerbose)
 {
 	errno = 0;
 	if (write(fd, buffer, len) == -1)
 	{
 		std::cout << "[USB] Writing to USB Device failed. Device Unavailable! Error " << errno << " from tcgetattr: " << strerror(errno) << std::endl;
-		return manageMsgErrors(false);
+
+		auto listOfDevices = UsbDevice::getConnectedACMDevices(idVendor, idProduct);
+
+		busType = mab::BusType_E::USB;
+
+		if (listOfDevices.size() == 0)
+		{
+			std::cout << "[USB, Reconnecting] No devices found!" << std::endl;
+			return manageMsgErrors(false);
+		}
+
+		if (instances.size() == 0)
+			serialDeviceName = listOfDevices[0];
+		else
+		{
+			for (auto &entry : listOfDevices)
+			{
+				unsigned int newIdCount = 0;
+				for (auto &instance : instances)
+					if (UsbDevice::getConnectedDeviceId(entry) != instance->getDeviceId())
+						newIdCount++;
+
+				/* only if all instances were different from the current one -> create new device */
+				if (newIdCount == instances.size())
+				{
+					serialDeviceName = entry;
+					goto loopdone2;
+				}
+			}
+			std::cout << "[USB, Reconnecting] Failed to create USB object" << std::endl;
+			return manageMsgErrors(false);
+		}
+	loopdone2:
+		int device_descriptor = open_device(serialDeviceName, idVendor, idProduct);
+		serialDeviceId = getConnectedDeviceId(serialDeviceName);
+
+		if (device_descriptor > 0)
+		{
+			tcgetattr(device_descriptor, &ti_prev);										 // Save the previous serial config
+			tcgetattr(device_descriptor, &tty);											 // Read the previous serial config
+			tty.c_cflag &= ~PARENB;														 // No parity
+			tty.c_cflag &= ~CSTOPB;														 // One stop bit
+			tty.c_cflag &= ~CSIZE;														 // Clear bit size setting
+			tty.c_cflag |= CS8;															 // 8 Bits mode
+			tty.c_cflag |= CREAD | CLOCAL;												 // Turn on READ & ignore ctrl lines (CLOCAL = 1)
+			tty.c_lflag &= ~ICANON;														 // Disable canonical mode
+			tty.c_lflag &= ~ECHO;														 // Disable echo
+			tty.c_lflag &= ~ECHOE;														 // Disable erasure
+			tty.c_lflag &= ~ECHONL;														 // Disable new-line echo
+			tty.c_lflag &= ~ISIG;														 // Disable interpretation of INTR, QUIT and SUSP
+			tty.c_iflag &= ~(IXON | IXOFF | IXANY);										 // Disable software flow control
+			tty.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL); // Disable special chars on RX
+			tty.c_oflag &= ~OPOST;														 // Prevent special interpretation of output bytes
+			tty.c_oflag &= ~ONLCR;														 // Prevent conversion of newline to carriage return/line feed
+			tty.c_cc[VTIME] = 0;														 // Wait for up to 0.1s (1 decisecond), returning as soon as any data is received.
+			tty.c_cc[VMIN] = 0;
+
+			tcsetattr(device_descriptor, TCSANOW, &tty); // Set the new serial config
+
+			this->fd = device_descriptor;
+
+			std::string setSerialCommand = "setserial " + getDeviceName() + " low_latency";
+			if (system(setSerialCommand.c_str()) != 0)
+				std::cout << "Could not execute command '" << setSerialCommand << "'. Communication in low-speed mode." << std::endl;
+
+			for (mab::Candle *candle : instances)
+			{
+				if (candle->getBus() == this)
+				{
+					candle->candle->end();
+					break;
+				}
+			}
+			std::cout << "[USB] Reconnection successful..." << std::endl;
+		}
+		else
+		{
+			std::cout << "[USB] Unable to reconnect yet..." << std::endl;
+			return manageMsgErrors(false);
+		}
 	}
+
 	if (waitForResponse)
 	{
 		if (receive(responseLen, timeout, faultVerbose))
 			return manageMsgErrors(true);
 		else
 		{
-			if (faultVerbose) std::cout << "[USB] Did not receive response from USB Device." << std::endl;
+			if (faultVerbose)
+				std::cout << "[USB] Did not receive response from USB Device." << std::endl;
 			return manageMsgErrors(false);
 		}
 	}
@@ -180,8 +261,8 @@ void UsbDevice::flushReceiveBuffer()
 
 UsbDevice::~UsbDevice()
 {
-	ti_prev.c_cflag &= ~HUPCL;		   // This to release the RTS after close
-	tcsetattr(fd, TCSANOW, &ti_prev);  // Restore the previous serial config
+	ti_prev.c_cflag &= ~HUPCL;		  // This to release the RTS after close
+	tcsetattr(fd, TCSANOW, &ti_prev); // Restore the previous serial config
 	close(fd);
 }
 
@@ -212,7 +293,7 @@ unsigned long UsbDevice::getConnectedDeviceId(std::string devName)
 #include <string>
 #include <vector>
 
-std::string exec(const char* cmd)
+std::string exec(const char *cmd)
 {
 	std::array<char, 128> buffer;
 	std::string result;
@@ -224,7 +305,7 @@ std::string exec(const char* cmd)
 	return result;
 }
 
-unsigned long hash(const char* str)
+unsigned long hash(const char *str)
 {
 	unsigned long hash = 5381;
 	int c;
@@ -263,7 +344,7 @@ bool checkDeviceAvailable(std::string devName, std::string idVendor, std::string
 	std::string cmdOutput = exec(cmd.c_str());
 
 	if (cmdOutput.size() < 5)
-		return false;  // no device of name /dev/ttyACMx
+		return false; // no device of name /dev/ttyACMx
 
 	std::stringstream result(cmdOutput);
 	std::string line;
