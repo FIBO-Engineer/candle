@@ -91,8 +91,10 @@ std::shared_ptr<Bus> Candle::makeBus(mab::BusType_E busType, std::string device)
 			else
 				return std::make_shared<UartDevice>();
 		}
-		default:
+		default:{
+			vout << "Error wrong bus type specified!" << statusFAIL << std::endl;
 			throw "Error wrong bus type specified!";
+		}
 	}
 	return nullptr;
 }
@@ -442,6 +444,7 @@ Md80& Candle::getMd80FromList(uint16_t id)
 	for (auto& md : md80s)
 		if (md.getId() == id)
 			return md;
+	vout << "getMd80FromList(id): Id not found on the list!" << statusFAIL << std::endl;
 	throw "getMd80FromList(id): Id not found on the list!";
 }
 bool Candle::controlMd80SetEncoderZero(Md80& drive)

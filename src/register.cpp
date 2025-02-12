@@ -29,6 +29,7 @@ uint32_t Register::pack(uint16_t regId, char* value, char* buffer)
 	/* in case no place is left in the buffer */
 	if ((len + 2) > (sizeof(regTxBuffer) - (buffer - regTxBuffer)))
 	{
+		std::cout << "Error while packaging data. Make sure its size is not above 62 bytes. Remember to add 2 bytes per field (field ID)." << std::endl;
 		throw "Error while packaging data. Make sure its size is not above 62 bytes. Remember to add 2 bytes per field (field ID).";
 		return 0;
 	}
@@ -85,6 +86,7 @@ bool Register::prepareFrame(mab::Md80FrameId_E frameId, Md80Reg_E regId, char* v
 
 	if (offset == 0)
 	{
+		std::cout << "Error while packaging data. Make sure its size is not above 62 bytes. Remember to add 2 bytes per field (field ID)." << std::endl;
 		throw "Error while packaging data. Make sure its size is not above 62 bytes. Remember to add 2 bytes per field (field ID).";
 		return false;
 	}
